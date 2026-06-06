@@ -1,4 +1,3 @@
-cd /home/claude/expense-ai && cat > src/styles.css << 'ENDCSS'
 :root {
   color-scheme: dark;
   --bg: #0d0f13;
