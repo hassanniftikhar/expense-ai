@@ -309,13 +309,15 @@ function renderInput() {
   app.innerHTML = `
     ${header()}
     <section class="input-screen">
-      <button class="month-switch" data-action="history">${escapeHtml(month?.name || "No month")} \u2022 tap for history</button>
+      <h1 class="welcome-heading">Welcome, Hassan</h1>
+      <div class="month-switch">${escapeHtml(month?.name || "No month")}</div>
       <div class="entry-card">
         <button class="mic-btn ${state.listening ? "live" : ""}" data-action="voice" aria-label="Voice input">${icon("mic")}</button>
         <textarea id="entry" rows="2" autocomplete="off" autocapitalize="none" placeholder="example: haircut 1000"></textarea>
       </div>
       ${status ? `<p class="entry-status ${state.listening ? "live" : ""}">${escapeHtml(status)}</p>` : ""}
       <button class="primary add-btn" data-action="record" disabled>Add to sheet</button>
+      <button class="view-record-btn" data-action="history">View ${escapeHtml(month?.name || "Record")}</button>
     </section>
   `;
   setTimeout(() => {
