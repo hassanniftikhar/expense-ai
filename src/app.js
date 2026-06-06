@@ -301,7 +301,7 @@ function renderAuth() {
 }
 
 function renderInput() {
-  const chips = ["grocery 3000", "uber 450", "received 1000 faran"];
+  const chips = ["grocery 3000", "uber 450", "received 1000 person name"];
   const month = activeMonth();
   app.innerHTML = `
     ${header()}
