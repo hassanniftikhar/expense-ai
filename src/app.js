@@ -448,11 +448,14 @@ function row(tx) {
   return `
     <article class="tx-row">
       <div class="tx-title">
-        <span class="tx-icon ${incoming ? "in" : "out"}">${icon(categoryIcon(tx.category))}</span>
+        <span class="tx-icon ${incoming ? "in" : "out"}">${icon(categoryIcon(tx.category, tx.kind))}</span>
         <span class="tx-name">${escapeHtml(tx.title)}<small class="amt ${incoming ? "in" : "out"}">${sign}${fmt(tx.amount)}</small></span>
       </div>
       <span class="pill">${escapeHtml(tx.category)}</span>
-      <time>${date.toLocaleDateString("en", { month: "short", day: "numeric" })}</time>
+      <div class="tx-row-end">
+        <time>${date.toLocaleDateString("en", { month: "short", day: "numeric" })}</time>
+        <button class="tx-delete-btn" data-action="delete-tx" data-tx-id="${tx.id}" aria-label="Delete transaction">${icon("trash")}</button>
+      </div>
     </article>
   `;
 }
@@ -558,6 +561,12 @@ app.addEventListener("click", async (event) => {
   if (action === "voice") startVoice();
   if (action === "clarify-received") resolveClarification("loan_received");
   if (action === "clarify-sent") resolveClarification("loan_sent");
+  if (action === "delete-tx") {
+    const txId = target.dataset.txId;
+    if (txId && confirm("Delete this transaction? This can't be undone.")) {
+      deleteTx(txId);
+    }
+  }
 });
 
 app.addEventListener("submit", async (event) => {
@@ -1126,14 +1135,9 @@ function xmlEscape(text) {
   return text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[char]));
 }
 
-function categoryIcon(category) {
-  const key = String(category || "").toLowerCase();
-  if (key.includes("dining")) return "fork";
-  if (key.includes("transport")) return "fuel";
-  if (key.includes("util")) return "bolt";
-  if (key.includes("received")) return "arrow-down";
-  if (key.includes("loan")) return "user";
-  return "bag";
+function categoryIcon(category, kind) {
+  const incoming = ["income", "loan_received"].includes(kind);
+  return incoming ? "arrow-down" : "arrow-up";
 }
 
 function icon(name) {
@@ -1153,9 +1157,23 @@ function icon(name) {
     bolt: '<svg viewBox="0 0 24 24"><path d="m13 2-9 13h8l-1 7 9-13h-8l1-7Z"/></svg>',
     bag: '<svg viewBox="0 0 24 24"><path d="M6 8h16l-2 13H8L6 8Z"/><path d="M10 8a4 4 0 0 1 8 0"/></svg>',
     "arrow-down": '<svg viewBox="0 0 24 24"><path d="M12 3v15M6 12l6 6 6-6"/></svg>',
+    "arrow-up": '<svg viewBox="0 0 24 24"><path d="M12 21V6M6 12l6-6 6 6"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
     user: '<svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>'
   };
   return icons[name] || icons.bag;
+}
+
+function deleteTx(txId) {
+  state.transactions = state.transactions.filter((tx) => tx.id !== txId);
+  saveLocal();
+  if (db.configured && state.session?.access_token !== "local-dev") {
+    fetch(`${CONFIG.supabaseUrl}/rest/v1/transactions?id=eq.${txId}`, {
+      method: "DELETE",
+      headers: db.headers()
+    }).catch(() => {});
+  }
+  render();
 }
 
 boot();
