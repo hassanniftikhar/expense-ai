@@ -31,7 +31,9 @@ const state = {
   authMode: "signin",
   authError: "",
   authNotice: "",
-  parseStatus: ""
+  parseStatus: "",
+  listening: false,
+  exportPickerMonthId: null
 };
 
 const app = document.querySelector("#app");
@@ -240,6 +242,7 @@ function render() {
   if (!state.months.length || needsSalarySetup()) return renderFirstMonth();
   if (state.pendingMonth) return renderMissingMonth();
   if (state.pendingClarification) return renderClarification();
+  if (state.exportPickerMonthId !== null) return renderExportPicker();
   if (state.view === "history") return renderHistory();
   if (state.view === "success") return renderSuccess();
   renderInput();
@@ -267,9 +270,7 @@ function renderFirstMonth() {
 function header() {
   return `
     <header class="topbar">
-      <button class="icon-button" data-action="menu" aria-label="Menu">${icon("menu")}</button>
       <div class="brand">EXPENSE_AI</div>
-      <button class="avatar" data-action="signout" aria-label="Sign out">AI</button>
     </header>
   `;
 }
@@ -301,27 +302,37 @@ function renderAuth() {
 }
 
 function renderInput() {
-  const chips = ["grocery 3000", "uber 450", "received 1000 person name"];
   const month = activeMonth();
+  const status = state.listening
+    ? "Listening… say your expenses, then pause or say \u201Cthat\u2019s it\u201D"
+    : state.parseStatus || "";
   app.innerHTML = `
     ${header()}
     <section class="input-screen">
-      <button class="month-switch" data-action="history">${escapeHtml(month?.name || "No month")}</button>
+      <button class="month-switch" data-action="history">${escapeHtml(month?.name || "No month")} \u2022 tap for history</button>
       <div class="entry-card">
-        <textarea id="entry" rows="3" autocomplete="off" autocapitalize="none" placeholder="haircut 1000" ${state.busy ? "disabled" : ""}></textarea>
-        <p>${state.parseStatus || "Type an amount and a tag, then tap Record"}</p>
+        <button class="mic-btn ${state.listening ? "live" : ""}" data-action="voice" aria-label="Voice input">${icon("mic")}</button>
+        <textarea id="entry" rows="2" autocomplete="off" autocapitalize="none" placeholder="example: haircut 1000"></textarea>
       </div>
-      <div class="chips">${chips.map((chip) => `<button data-chip="${chip}">${chip}</button>`).join("")}</div>
-      <button class="primary record-btn" data-action="record" ${state.busy ? "disabled" : ""}>
-        ${state.busy ? "Recording…" : "Record"}
-      </button>
-      <div class="bottom-actions">
-        <button class="secondary" data-action="voice">${icon("mic")}<span>Voice</span></button>
-        <button class="secondary" data-action="history">${icon("history")}<span>View History</span></button>
-      </div>
+      ${status ? `<p class="entry-status ${state.listening ? "live" : ""}">${escapeHtml(status)}</p>` : ""}
+      <button class="primary add-btn" data-action="record" disabled>Add to sheet</button>
     </section>
   `;
-  setTimeout(() => document.querySelector("#entry")?.focus(), 50);
+  setTimeout(() => {
+    const entry = document.querySelector("#entry");
+    if (entry) {
+      entry.focus();
+      updateAddButton();
+    }
+  }, 50);
+}
+
+function updateAddButton() {
+  const entry = document.querySelector("#entry");
+  const btn = document.querySelector(".add-btn");
+  if (!entry || !btn) return;
+  const hasText = entry.value.trim().length > 0;
+  btn.disabled = !hasText || state.busy;
 }
 
 function renderSuccess() {
@@ -398,12 +409,15 @@ function renderHistory() {
         <p>OF ${fmt(sum.salary + sum.received)} BUDGET</p>
         <div class="bar"><span style="width:${budgetPercent}%"></span></div>
       </div>
-      <div class="sheet-title">
-        <select id="month-select" aria-label="Choose month">
+      <div class="month-picker">
+        <label class="field-label">Select month</label>
+        <select id="month-select" aria-label="Select month">
           ${state.months.map((item) => `<option value="${item.id}" ${item.id === month?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
         </select>
-        <button class="secondary compact" data-action="edit-month">${icon("edit")}<span>Edit</span></button>
-        <button class="secondary compact" data-action="new-month">${icon("plus")}<span>Month</span></button>
+        <div class="month-actions">
+          <button class="secondary compact" data-action="edit-month">${icon("edit")}<span>Edit salary</span></button>
+          <button class="secondary compact" data-action="new-month">${icon("plus")}<span>New month</span></button>
+        </div>
       </div>
       <div class="stats">
         <span>Salary <b>${fmt(sum.salary)}</b></span>
@@ -416,10 +430,10 @@ function renderHistory() {
           ${txs.length ? txs.map(row).join("") : `<div class="empty">No entries yet</div>`}
         </div>
       </section>
+      <button class="text-button signout-link" data-action="signout">Sign out</button>
       <nav class="dock">
-        <button data-action="input">${icon("plus-circle")}</button>
-        <button class="active">${icon("table")}</button>
-        <button data-action="export">${icon("download")}</button>
+        <button data-action="input" aria-label="Add entries">${icon("plus-circle")}</button>
+        <button data-action="open-export" aria-label="Export a month">${icon("download")}</button>
       </nav>
     </section>
   `;
@@ -427,16 +441,38 @@ function renderHistory() {
 
 function row(tx) {
   const date = new Date(tx.created_at);
-  const sign = ["income", "loan_received"].includes(tx.kind) ? "+" : "-";
+  const incoming = ["income", "loan_received"].includes(tx.kind);
+  const sign = incoming ? "+" : "-";
   return `
     <article class="tx-row">
       <div class="tx-title">
-        <span class="tx-icon">${icon(categoryIcon(tx.category))}</span>
-        <span>${escapeHtml(tx.title)}<small>${sign}${fmt(tx.amount)}</small></span>
+        <span class="tx-icon ${incoming ? "in" : "out"}">${icon(categoryIcon(tx.category))}</span>
+        <span class="tx-name">${escapeHtml(tx.title)}<small class="amt ${incoming ? "in" : "out"}">${sign}${fmt(tx.amount)}</small></span>
       </div>
       <span class="pill">${escapeHtml(tx.category)}</span>
       <time>${date.toLocaleDateString("en", { month: "short", day: "numeric" })}</time>
     </article>
+  `;
+}
+
+function renderExportPicker() {
+  const selected = state.exportPickerMonthId || activeMonth()?.id || state.months[0]?.id;
+  app.innerHTML = `
+    <section class="modal-screen">
+      <div class="modal">
+        <strong>EXPORT TO EXCEL</strong>
+        <h2>Which month?</h2>
+        <p>Pick a month to download its sheet as an .xlsx file.</p>
+        <label class="field-label">Month</label>
+        <select id="export-select" aria-label="Month to export">
+          ${state.months.map((item) => `<option value="${item.id}" ${item.id === selected ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+        </select>
+        <div class="choice-row">
+          <button class="primary" data-action="export-confirm">Download</button>
+          <button class="secondary" data-action="export-cancel">Cancel</button>
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -498,7 +534,21 @@ app.addEventListener("click", async (event) => {
     state.view = "input";
     render();
   }
-  if (action === "export") exportMonth();
+  if (action === "open-export") {
+    state.exportPickerMonthId = activeMonth()?.id || state.months[0]?.id || "";
+    render();
+  }
+  if (action === "export-cancel") {
+    state.exportPickerMonthId = null;
+    render();
+  }
+  if (action === "export-confirm") {
+    const sel = document.querySelector("#export-select");
+    const id = sel?.value || state.exportPickerMonthId;
+    state.exportPickerMonthId = null;
+    render();
+    exportMonth(id);
+  }
   if (action === "record") {
     const entry = document.querySelector("#entry");
     if (entry) await submitEntry(entry.value);
@@ -522,6 +572,10 @@ app.addEventListener("submit", async (event) => {
   if (event.target.id === "missing-month-form") {
     await createPendingMonth(event.target);
   }
+});
+
+app.addEventListener("input", (event) => {
+  if (event.target.id === "entry") updateAddButton();
 });
 
 app.addEventListener("change", (event) => {
@@ -640,7 +694,7 @@ async function submitEntry(text) {
     }
     const items = parsed.items || [];
     if (!items.length) {
-      state.parseStatus = "Couldn't find an amount. Try e.g. \"grocery 4000\".";
+      state.parseStatus = "This app records expenses. Try e.g. \u201Cgroceries 2000\u201D or \u201Creceived 5000 salary\u201D.";
       render();
       return;
     }
@@ -672,10 +726,22 @@ async function parseEntry(text) {
   return { items: quick.items, clarifications: quick.clarifications };
 }
 
+const STOPWORDS = new Set(["a", "an", "the", "of", "at", "for", "on", "in", "to", "with", "from", "and", "my", "me", "i", "was", "is", "rs", "pkr", "rupees", "rupee", "paisa", "this", "that", "add"]);
+const TITLE_VERBS = new Set(["spent", "spend", "paid", "pay", "sent", "send", "gave", "give", "returned", "return", "received", "recieved", "receive", "got", "get", "income"]);
+
+function cleanWords(words, dropVerbs = true) {
+  return words
+    .map((word) => word.toLowerCase().replace(/[^a-z']/g, ""))
+    .filter((word) => word && !STOPWORDS.has(word) && (!dropVerbs || !TITLE_VERBS.has(word)));
+}
+
 function quickParse(text) {
   const targetMonthName = extractMonthName(text);
   const withoutMonth = targetMonthName ? stripMonthPhrase(text, targetMonthName) : text;
-  const cleaned = withoutMonth.toLowerCase().replace(/,/g, " ");
+  // Join thousands separators ("4,500" -> "4500") before turning commas into spaces.
+  const cleaned = withoutMonth.toLowerCase().replace(/(\d),(\d)/g, "$1$2").replace(/,/g, " ");
+  const hasVerb = /\b(received|recieved|got|income|salary|paid|sent|gave|returned)\b/.test(cleaned);
+
   const spentOn = cleaned.match(/\b(?:spent|paid|sent|gave)\s+(?:rs\.?\s*)?(\d+(?:\.\d+)?k?)\s+(?:on|for|to)\s+([a-z][a-z\s]{1,40})\b/i);
   if (spentOn) {
     const title = titleCase(spentOn[2].replace(/\b(in|to|for|on)$/i, "").trim());
@@ -687,11 +753,38 @@ function quickParse(text) {
       confident: true
     };
   }
+
+  // Single number anywhere in a short phrase: everything else becomes the title.
+  // Handles "lunch 1500 at cafe", "2000 groceries", "office party 5000", etc.
+  const numbers = cleaned.match(/\b\d+(?:\.\d+)?k?\b/gi) || [];
+  if (numbers.length === 1) {
+    const amount = parseAmount(numbers[0]);
+    if (amount) {
+      const rest = cleaned.replace(numbers[0], " ").split(/\s+/);
+      const meaningful = cleanWords(rest, true);
+      const fallback = cleanWords(rest, false);
+      const title = titleCase((meaningful.length ? meaningful : fallback).join(" ")) || "Expense";
+      const person = inferPerson(title) || inferPerson(titleCase(fallback.join(" ")));
+      if (person && !hasVerb) {
+        return {
+          items: [],
+          clarifications: [{ title: titleCase(person), amount, person, targetMonthName, reason: "Was this money received or sent?" }],
+          confident: true
+        };
+      }
+      const kind = inferKind(cleaned, title);
+      return {
+        items: [{ kind, title, amount, category: inferCategory(title, kind), person: person || null, targetMonthName, confidence: 0.8 }],
+        clarifications: [],
+        confident: true
+      };
+    }
+  }
+
   const tokens = cleaned.split(/\s+/).filter(Boolean);
   const items = [];
   const clarifications = [];
   let label = [];
-  let hasVerb = /\b(received|recieved|got|income|salary|paid|sent|gave|returned)\b/.test(cleaned);
 
   for (const token of tokens) {
     const amount = parseAmount(token);
@@ -709,15 +802,17 @@ function quickParse(text) {
       label.push(token);
     }
   }
-  // A trailing name after the amount (e.g. "received 1000 faran") names the
-  // other party. Attach it to the most recent income/loan row so the source
-  // isn't lost, without changing any amounts or kinds.
-  if (label.length && items.length) {
+  // Trailing words after the last amount: attach a name to an income/loan row,
+  // or extra description to a single expense, so nothing is silently dropped.
+  if (label.length && items.length === 1) {
+    const last = items[0];
     const person = inferPerson(titleCase(label.join(" ")));
-    const last = items[items.length - 1];
     if (person && !last.person && ["income", "loan_received", "loan_sent"].includes(last.kind)) {
       last.person = person;
       last.title = `${last.title} ${titleCase(person)}`.trim();
+    } else if (last.kind === "expense") {
+      const extra = cleanWords(label, true);
+      if (extra.length) last.title = `${last.title} ${titleCase(extra.join(" "))}`.trim();
     }
   }
   return { items, clarifications, confident: items.length > 0 || clarifications.length > 0 };
@@ -806,38 +901,107 @@ async function recordItems(items, monthId = activeMonth()?.id) {
   render();
 }
 
+let activeRecognition = null;
+
 function startVoice() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    alert("Voice input is not available in this browser. Typing will be faster here.");
+    state.parseStatus = "Voice isn\u2019t supported in this browser \u2014 please type instead.";
+    render();
     return;
   }
+  // Tapping the mic again while listening stops it.
+  if (state.listening) {
+    stopVoice();
+    return;
+  }
+
   const recognition = new SpeechRecognition();
+  activeRecognition = recognition;
   recognition.lang = "en-PK";
-  recognition.interimResults = false;
-  recognition.onresult = (event) => {
-    const text = event.results[0][0].transcript;
+  recognition.continuous = false; // auto-stops shortly after you stop talking
+  recognition.interimResults = true;
+
+  let finalText = "";
+  state.listening = true;
+  state.parseStatus = "";
+  render();
+
+  const writeField = (value) => {
     const entry = document.querySelector("#entry");
-    if (entry) entry.value = text;
+    if (entry) {
+      entry.value = value;
+      updateAddButton();
+    }
   };
-  recognition.start();
+
+  recognition.onresult = (event) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const chunk = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalText += `${chunk} `;
+      else interim += chunk;
+    }
+    const combined = `${finalText}${interim}`.trim();
+    writeField(combined);
+    // Stop phrase: "that's it" / "thats it"
+    if (/\bthat'?s it\b/i.test(combined)) {
+      try { recognition.stop(); } catch {}
+    }
+  };
+
+  recognition.onerror = () => {
+    // Errors (no-speech, denied, network) fall through to onend.
+  };
+
+  recognition.onend = async () => {
+    state.listening = false;
+    activeRecognition = null;
+    const field = document.querySelector("#entry");
+    let text = (finalText || field?.value || "").trim();
+    text = text.replace(/\bthat'?s it\b/ig, "").trim();
+    if (text) {
+      writeField(text);
+      await submitEntry(text);
+    } else {
+      state.parseStatus = "Didn\u2019t catch that \u2014 please say your expenses, e.g. \u201Cgroceries 2000\u201D.";
+      render();
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch {
+    state.listening = false;
+    activeRecognition = null;
+    render();
+  }
 }
 
-function exportMonth() {
-  const month = activeMonth();
+function stopVoice() {
+  if (activeRecognition) {
+    try { activeRecognition.stop(); } catch {}
+  }
+}
+
+function exportMonth(monthId) {
+  const month = state.months.find((item) => item.id === monthId) || activeMonth();
+  if (!month) return;
   const rows = [
     ["Month", month.name],
     ["Salary", month.salary],
     [],
     ["Date", "Type", "Transaction", "Category", "Person", "Amount PKR"],
-    ...monthTransactions().map((tx) => [
-      new Date(tx.created_at).toLocaleDateString("en-PK"),
-      tx.kind,
-      tx.title,
-      tx.category,
-      tx.person || "",
-      tx.amount
-    ])
+    ...state.transactions
+      .filter((tx) => tx.month_id === month.id)
+      .map((tx) => [
+        new Date(tx.created_at).toLocaleDateString("en-PK"),
+        tx.kind,
+        tx.title,
+        tx.category,
+        tx.person || "",
+        tx.amount
+      ])
   ];
   const blob = xlsxBlob(rows);
   download(blob, `${month.name.replace(/\s+/g, "-").toLowerCase()}-expenses.xlsx`);
