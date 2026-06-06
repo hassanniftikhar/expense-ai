@@ -309,13 +309,15 @@ function renderInput() {
   app.innerHTML = `
     ${header()}
     <section class="input-screen">
-      <button class="month-switch" data-action="history">${escapeHtml(month?.name || "No month")} \u2022 tap for history</button>
+      <h1 class="welcome-heading">Welcome, Hassan</h1>
+      <div class="month-switch">${escapeHtml(month?.name || "No month")}</div>
       <div class="entry-card">
         <button class="mic-btn ${state.listening ? "live" : ""}" data-action="voice" aria-label="Voice input">${icon("mic")}</button>
         <textarea id="entry" rows="2" autocomplete="off" autocapitalize="none" placeholder="example: haircut 1000"></textarea>
       </div>
       ${status ? `<p class="entry-status ${state.listening ? "live" : ""}">${escapeHtml(status)}</p>` : ""}
       <button class="primary add-btn" data-action="record" disabled>Add to sheet</button>
+      <button class="view-record-btn" data-action="history">View ${escapeHtml(month?.name || "Record")}</button>
     </section>
   `;
   setTimeout(() => {
@@ -425,7 +427,7 @@ function renderHistory() {
         <span>Spent <b>${fmt(sum.spent)}</b></span>
       </div>
       <section class="table-card">
-        <div class="table-head"><span>TRANSACTION</span><span>CATEGORY</span><span>DATE</span><span></span></div>
+        <div class="table-head"><span>TRANSACTION</span><span>CATEGORY</span><span>DATE</span></div>
         <div class="rows">
           ${txs.length ? txs.map(row).join("") : `<div class="empty">No entries yet</div>`}
         </div>
@@ -446,12 +448,11 @@ function row(tx) {
   return `
     <article class="tx-row">
       <div class="tx-title">
-        <span class="tx-icon ${incoming ? "in" : "out"}">${icon(incoming ? "arrow-down" : "arrow-up")}</span>
+        <span class="tx-icon ${incoming ? "in" : "out"}">${icon(categoryIcon(tx.category))}</span>
         <span class="tx-name">${escapeHtml(tx.title)}<small class="amt ${incoming ? "in" : "out"}">${sign}${fmt(tx.amount)}</small></span>
       </div>
       <span class="pill">${escapeHtml(tx.category)}</span>
       <time>${date.toLocaleDateString("en", { month: "short", day: "numeric" })}</time>
-      <button class="trash-btn" data-action="delete-tx" data-id="${escapeHtml(tx.id)}" aria-label="Delete entry">${icon("trash")}</button>
     </article>
   `;
 }
@@ -1152,8 +1153,6 @@ function icon(name) {
     bolt: '<svg viewBox="0 0 24 24"><path d="m13 2-9 13h8l-1 7 9-13h-8l1-7Z"/></svg>',
     bag: '<svg viewBox="0 0 24 24"><path d="M6 8h16l-2 13H8L6 8Z"/><path d="M10 8a4 4 0 0 1 8 0"/></svg>',
     "arrow-down": '<svg viewBox="0 0 24 24"><path d="M12 3v15M6 12l6 6 6-6"/></svg>',
-    "arrow-up": '<svg viewBox="0 0 24 24"><path d="M12 21V6M6 12l6-6 6 6"/></svg>',
-    trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
     user: '<svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>'
   };
   return icons[name] || icons.bag;
