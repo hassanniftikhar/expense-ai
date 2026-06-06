@@ -561,7 +561,7 @@ textarea::placeholder {
 
 .table-head {
   display: grid;
-  grid-template-columns: 1.7fr 0.9fr 0.6fr;
+  grid-template-columns: 1.7fr 0.9fr 0.8fr;
   gap: 0.6rem;
   padding: 0.9rem 1rem;
   border-bottom: 1px solid var(--line);
@@ -570,11 +570,43 @@ textarea::placeholder {
 
 .tx-row {
   display: grid;
-  grid-template-columns: 1.7fr 0.9fr 0.6fr;
+  grid-template-columns: 1.7fr 0.9fr 0.8fr;
   gap: 0.6rem;
   align-items: center;
   padding: 0.8rem 1rem;
   border-bottom: 1px solid var(--line);
+}
+
+.tx-row-end {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: space-between;
+}
+
+.tx-delete-btn {
+  flex-shrink: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: #4a4d57;
+  border-radius: 0.4rem;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.tx-delete-btn svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  stroke-width: 2;
+}
+
+.tx-delete-btn:hover {
+  color: #f0888f;
+  background: rgba(176, 64, 72, 0.14);
 }
 
 .tx-title {
