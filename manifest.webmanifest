@@ -1,0 +1,16 @@
+{
+  "name": "Expense_AI",
+  "short_name": "Expense_AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101217",
+  "theme_color": "#101217",
+  "icons": [
+    {
+      "src": "/public/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
